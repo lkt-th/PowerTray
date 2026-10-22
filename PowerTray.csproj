@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>PowerTray</AssemblyName>
+    <RootNamespace>PowerTray</RootNamespace>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+    <ApplicationIcon>assets\PowerTray.ico</ApplicationIcon>
+    <!-- Run on .NET 8 or any newer Desktop Runtime the user has -->
+    <RollForward>LatestMajor</RollForward>
+
+    <!-- Shown in Settings and in the exe's file properties -->
+    <Product>PowerTray</Product>
+    <Version>1.0.1</Version>
+    <Authors>LKT</Authors>
+    <Copyright>© 2026 LKT · Made with Claude</Copyright>
+    <Description>Power options next to the Windows clock</Description>
+  </PropertyGroup>
+
+</Project>
