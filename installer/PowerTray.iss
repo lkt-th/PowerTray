@@ -56,6 +56,36 @@ Filename: "{app}\{#AppExe}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags
 Filename: "{sys}\taskkill.exe"; Parameters: "/f /im {#AppExe}"; Flags: runhidden; RunOnceId: "StopPowerTray"
 
 [Code]
+// The app is framework-dependent: it needs the .NET Desktop Runtime 8 or newer
+function IsDesktopRuntimeInstalled: Boolean;
+var
+  FindRec: TFindRec;
+begin
+  Result := False;
+  if FindFirst(ExpandConstant('{commonpf64}\dotnet\shared\Microsoft.WindowsDesktop.App\*'), FindRec) then
+  try
+    repeat
+      if (FindRec.Attributes and FILE_ATTRIBUTE_DIRECTORY <> 0) and
+         (StrToIntDef(Copy(FindRec.Name, 1, Pos('.', FindRec.Name) - 1), 0) >= 8) then
+        Result := True;
+    until Result or not FindNext(FindRec);
+  finally
+    FindClose(FindRec);
+  end;
+end;
+
+function InitializeSetup: Boolean;
+var
+  ErrorCode: Integer;
+begin
+  Result := True;
+  if not IsDesktopRuntimeInstalled then
+    if SuppressibleMsgBox('PowerTray needs the .NET Desktop Runtime 8 or newer, which is not installed on this PC.' + #13#10#13#10 +
+        'Open the download page now? Setup will continue; start PowerTray once the runtime is installed.',
+        mbConfirmation, MB_YESNO, IDNO) = IDYES then
+      ShellExec('open', 'https://dotnet.microsoft.com/download/dotnet/8.0', '', '', SW_SHOWNORMAL, ewNoWait, ErrorCode);
+end;
+
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
   RunValue: String;

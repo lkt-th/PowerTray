@@ -10,10 +10,12 @@
     <RootNamespace>PowerTray</RootNamespace>
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
     <ApplicationIcon>assets\PowerTray.ico</ApplicationIcon>
+    <!-- Run on .NET 8 or any newer Desktop Runtime the user has -->
+    <RollForward>LatestMajor</RollForward>
 
     <!-- Shown in Settings and in the exe's file properties -->
     <Product>PowerTray</Product>
-    <Version>1.0.2</Version>
+    <Version>1.0.1</Version>
     <!-- Keep the git commit out of ProductVersion; the installer reads it as its version -->
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <Authors>LKT</Authors>
