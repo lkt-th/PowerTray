@@ -23,7 +23,12 @@ Right-click the tray icon and choose **Settings…**, or click the gear in the m
 
 ## Install
 
-1. Install the [.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0) (or a newer version) if you don't have it.
+> [!IMPORTANT]
+> PowerTray needs the **.NET 8 Desktop Runtime** (or newer).
+>
+> **[⬇ Download .NET 8 Desktop Runtime (Windows x64)](https://aka.ms/dotnet/8.0/windowsdesktop-runtime-win-x64.exe)** · [All .NET 8 downloads](https://dotnet.microsoft.com/download/dotnet/8.0)
+
+1. Install the [.NET 8 Desktop Runtime](https://aka.ms/dotnet/8.0/windowsdesktop-runtime-win-x64.exe) if you don't have it. The PowerTray installer also reminds you if it's missing.
 2. Download `PowerTraySetup-<version>.exe` from the [latest release](https://github.com/lkt-th/PowerTray/releases/latest) and run it. It installs for your user only into `%LOCALAPPDATA%\Programs\PowerTray`, so it doesn't need admin rights.
 
 PowerTray needs Windows 10 (version 1809) or later.
