@@ -16,6 +16,14 @@ Power options next to the Windows clock. Click the tray icon to lock, sign out, 
 - **Make it yours.** Set the menu's transparency (up to 50%) and add your own background image.
 - **Start with Windows.** Turn this on to have PowerTray run when you sign in.
 
+## Screen time
+
+After you turn on **Screen time** in Settings, a Screen time bar appears in the menu with today's total. Click it to see the time for each app, and use ‹ › to look at earlier days.
+
+<p align="center">
+  <img src="docs/screentime.png" alt="Screen time for each app in the PowerTray menu" width="360">
+</p>
+
 ## Settings
 
 Right-click the tray icon and choose **Settings…**, or click the gear in the menu. The preview on the right updates as you make changes.
