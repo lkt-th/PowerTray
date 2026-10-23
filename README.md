@@ -10,7 +10,7 @@ Power options next to the Windows clock. Click the tray icon to lock, sign out, 
 
 - **One click to power options.** The menu looks like a Windows 11 flyout and opens just above the tray icon. It follows the light or dark theme and your accent color.
 - **Lock, Sign out, Sleep, Hibernate, Restart, Shut down.** Hibernate only appears if your PC supports it.
-- **Shutdown timer.** Pick a delay with the − / + buttons or a preset (15 min, 30 min, 1 hr, 2 hr). A dot appears on the tray icon while the timer runs, and the tooltip shows the time left. You get a warning 1 minute before shutdown, and you can cancel the timer from the menu or by right-clicking the icon.
+- **Shutdown timer.** Pick a delay with the − / + buttons or a preset (15 min, 30 min, 1 hr, 2 hr). A dot appears on the tray icon while the timer runs, and the tooltip shows the time left. You get a warning 1 minute before shutdown, and 15 seconds before it a confirmation opens where you can shut down right away or cancel. If nobody answers, the PC shuts down and closes open apps without saving them. You can also cancel the timer from the menu or by right-clicking the icon.
 - **Confirmation you control.** Choose which buttons ask before they run. You can also make a confirmation go ahead by itself after 5, 10, 15 or 30 seconds.
 - **Make it yours.** Set the menu's transparency (up to 50%) and add your own background image.
 - **Start with Windows.** Turn this on to have PowerTray run when you sign in.

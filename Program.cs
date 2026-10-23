@@ -77,7 +77,11 @@ sealed class TrayContext : ApplicationContext
         _timer.Tick += UpdateTooltip;
         _timer.Warning += () => _tray.ShowBalloonTip(10000, "PowerTray",
             "Your PC will shut down in 1 minute. Save your work.", ToolTipIcon.Warning);
-        _timer.Elapsed += () => Run("shutdown", "/s /t 0");
+        // The timer usually runs unattended, so it forces apps closed instead of waiting on them
+        var timedShutdown = new PowerAction("", "Shut down", "Time's up. Shut down now?",
+            "Open apps will close without saving.", () => Run("shutdown", "/s /f /t 0"));
+        _timer.FinalWarning += () => _popup.ConfirmTimedShutdown(timedShutdown);
+        _timer.Elapsed += timedShutdown.Run;
 
         // --show opens the popup, --settings opens the settings dialog (handy for shortcuts)
         if (args.Contains("--show") || args.Contains("--settings"))

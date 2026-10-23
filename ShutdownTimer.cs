@@ -1,10 +1,12 @@
 namespace PowerTray;
 
-/// <summary>Counts down to a deadline and fires once, with a one-minute warning.</summary>
+/// <summary>Counts down to a deadline and fires once, with a one-minute warning and a final warning.</summary>
 sealed class ShutdownTimer : IDisposable
 {
+    public static readonly TimeSpan FinalWarningLead = TimeSpan.FromSeconds(15);
+
     readonly System.Windows.Forms.Timer _tick = new() { Interval = 1000 };
-    bool _warned;
+    bool _warned, _finalWarned;
 
     public DateTime? Deadline { get; private set; }
     public bool Active => Deadline != null;
@@ -15,6 +17,8 @@ sealed class ShutdownTimer : IDisposable
     /// <summary>Every second while running.</summary>
     public event Action? Tick;
     public event Action? Warning;
+    /// <summary><see cref="FinalWarningLead"/> before the deadline.</summary>
+    public event Action? FinalWarning;
     public event Action? Elapsed;
 
     public ShutdownTimer() => _tick.Tick += OnTick;
@@ -23,6 +27,7 @@ sealed class ShutdownTimer : IDisposable
     {
         Deadline = DateTime.Now + delay;
         _warned = delay <= TimeSpan.FromMinutes(1);
+        _finalWarned = false;
         _tick.Start();
         Changed?.Invoke();
     }
@@ -38,6 +43,15 @@ sealed class ShutdownTimer : IDisposable
     void OnTick(object? sender, EventArgs e)
     {
         var left = Remaining;
+        if (!_finalWarned && left <= FinalWarningLead)
+        {
+            // Always give the full lead, even if the PC slept through part of it
+            _finalWarned = true;
+            if (left < FinalWarningLead) Deadline = DateTime.Now + FinalWarningLead;
+            FinalWarning?.Invoke();
+            Tick?.Invoke();
+            return;
+        }
         if (left == TimeSpan.Zero)
         {
             Cancel();

@@ -37,6 +37,7 @@ sealed class PowerPopup : Form
     string? _backgroundKey;
     long _hiddenAt, _animStart, _confirmStart;
     int _confirmTimeout;
+    bool _timedConfirm;
     int _fromTop, _toTop;
 
     int FooterTop => HeaderH + _contentH + Pad;
@@ -60,7 +61,12 @@ sealed class PowerPopup : Form
         _anim.Tick += OnAnimTick;
         _confirmTick.Tick += OnConfirmTick;
         _timer.Tick += RefreshIfVisible;
-        _timer.Changed += () => { LayoutHits(); RefreshIfVisible(); };
+        _timer.Changed += () =>
+        {
+            if (_timedConfirm && !_timer.Active) { HidePopup(); return; }
+            LayoutHits();
+            RefreshIfVisible();
+        };
     }
 
     protected override CreateParams CreateParams
@@ -80,6 +86,23 @@ sealed class PowerPopup : Form
         // The click on the tray icon that closed us via Deactivate should not reopen it
         if (Environment.TickCount64 - _hiddenAt < 300) return;
         ShowNear(anchor);
+    }
+
+    /// <summary>
+    /// Asks before the shutdown timer goes off. The timer runs the shutdown itself if nobody answers,
+    /// so this only counts down alongside it; Cancel stops the timer.
+    /// </summary>
+    public void ConfirmTimedShutdown(PowerAction action)
+    {
+        if (!Visible)
+        {
+            var wa = Screen.PrimaryScreen!.WorkingArea;
+            ShowNear(new Point(wa.Right, wa.Bottom));
+        }
+        SetView(View.Confirm, action);
+        _timedConfirm = true;
+        _confirmTimeout = (int)ShutdownTimer.FinalWarningLead.TotalSeconds;
+        _confirmTick.Start();
     }
 
     void ShowNear(Point anchor)
@@ -146,6 +169,7 @@ sealed class PowerPopup : Form
     {
         _anim.Stop();
         _confirmTick.Stop();
+        _timedConfirm = false;
         Hide();
         _hiddenAt = Environment.TickCount64;
     }
@@ -164,18 +188,21 @@ sealed class PowerPopup : Form
     }
 
     /// <summary>Milliseconds left before the confirmation confirms itself.</summary>
-    long ConfirmRemaining => _confirmTimeout * 1000L - (Environment.TickCount64 - _confirmStart);
+    long ConfirmRemaining => _timedConfirm
+        ? Math.Min(_confirmTimeout * 1000L, (long)_timer.Remaining.TotalMilliseconds)
+        : _confirmTimeout * 1000L - (Environment.TickCount64 - _confirmStart);
 
     void OnConfirmTick(object? sender, EventArgs e)
     {
-        if (ConfirmRemaining <= 0) Run(_confirming!);
+        if (!_timedConfirm && ConfirmRemaining <= 0) Run(_confirming!);
         else Invalidate();
     }
 
     protected override void OnDeactivate(EventArgs e)
     {
         base.OnDeactivate(e);
-        if (Visible) HidePopup();
+        // Keep the timer's last warning up until it's answered or the time runs out
+        if (Visible && !_timedConfirm) HidePopup();
     }
 
     protected override void OnFormClosing(FormClosingEventArgs e)
@@ -189,7 +216,8 @@ sealed class PowerPopup : Form
     {
         base.OnKeyDown(e);
         if (e.KeyCode != Keys.Escape) return;
-        if (_view != View.Grid) SetView(View.Grid);
+        if (_timedConfirm) _timer.Cancel();
+        else if (_view != View.Grid) SetView(View.Grid);
         else HidePopup();
     }
 
@@ -242,6 +270,7 @@ sealed class PowerPopup : Form
     {
         _view = view;
         _confirming = confirming;
+        _timedConfirm = false;
 
         // With auto-confirm on, an unanswered confirmation runs the action on its own
         _confirmTick.Stop();
@@ -294,7 +323,13 @@ sealed class PowerPopup : Form
                 Run(h.Action!);
                 break;
             case Kind.Yes:
-                Run(_confirming!);
+                var action = _confirming!;
+                // Stop the timer so it doesn't run the shutdown a second time
+                if (_timedConfirm) _timer.Cancel();
+                Run(action);
+                break;
+            case Kind.No when _timedConfirm:
+                _timer.Cancel();
                 break;
             case Kind.No:
             case Kind.Back:
