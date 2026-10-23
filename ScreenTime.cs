@@ -183,7 +183,7 @@ sealed class ScreenTime : IDisposable
     (string Name, string? Path)? ForegroundApp()
     {
         var hwnd = GetForegroundWindow();
-        if (hwnd == IntPtr.Zero) return null;
+        if (hwnd == IntPtr.Zero || !OnTaskbar(hwnd)) return null;
         GetWindowThreadProcessId(hwnd, out uint pid);
         string? path = ImagePath(pid);
 
@@ -205,6 +205,27 @@ sealed class ScreenTime : IDisposable
             catch (ArgumentException) { return null; }
         }
         return (DisplayName(path), path);
+    }
+
+    /// <summary>
+    /// Whether the window, or a window that owns it (for a dialog), has a taskbar button,
+    /// so the desktop, Start, tray flyouts and other shell surfaces don't count.
+    /// </summary>
+    static bool OnTaskbar(IntPtr hwnd)
+    {
+        for (var w = hwnd; w != IntPtr.Zero; w = GetWindow(w, 4 /* GW_OWNER */))
+        {
+            if (!IsWindowVisible(w)) continue;
+            if (DwmGetWindowAttribute(w, 14 /* DWMWA_CLOAKED */, out int cloaked, sizeof(int)) == 0 && cloaked != 0) continue;
+            long exStyle = (long)GetWindowLongPtr(w, -20 /* GWL_EXSTYLE */);
+            if ((exStyle & 0x40000 /* WS_EX_APPWINDOW */) != 0) return true;
+            if ((exStyle & 0x80 /* WS_EX_TOOLWINDOW */) != 0 || GetWindow(w, 4) != IntPtr.Zero) continue;
+            var cls = new StringBuilder(64);
+            GetClassName(w, cls, cls.Capacity);
+            // Start, search and other shell flyouts are unowned top-level windows of these classes
+            if (cls.ToString() is not ("Windows.UI.Core.CoreWindow" or "Progman" or "WorkerW")) return true;
+        }
+        return false;
     }
 
     /// <summary>The exe's description ("Google Chrome"), falling back to its file name.</summary>
@@ -260,6 +281,11 @@ sealed class ScreenTime : IDisposable
     [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint pid);
     [DllImport("user32.dll")] static extern bool EnumChildWindows(IntPtr parent, EnumWindowsProc callback, IntPtr lParam);
+    [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr hwnd);
+    [DllImport("user32.dll")] static extern IntPtr GetWindow(IntPtr hwnd, uint cmd);
+    [DllImport("user32.dll")] static extern IntPtr GetWindowLongPtr(IntPtr hwnd, int index);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetClassName(IntPtr hwnd, StringBuilder name, int max);
+    [DllImport("dwmapi.dll")] static extern int DwmGetWindowAttribute(IntPtr hwnd, int attr, out int value, int size);
     [DllImport("kernel32.dll")] static extern IntPtr OpenProcess(uint access, bool inherit, uint pid);
     [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr handle);
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
