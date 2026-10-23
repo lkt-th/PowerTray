@@ -9,11 +9,11 @@ namespace PowerTray;
 sealed class SettingsDialog : Form
 {
     // Layout in 96-DPI units, scaled by _s
-    const int W = 420, H = 540, Pad = 20, CardPad = 16, Step = 5, BgCardY = 204, ConfirmCardY = 284, PreviewW = 300;
+    const int W = 420, H = 616, Pad = 20, CardPad = 16, Step = 5, BgCardY = 204, ConfirmCardY = 284, PreviewW = 300;
     const int ConfirmCols = 3, ConfirmItemH = 32;
     const float PreviewScale = 0.66f;
 
-    enum Kind { Startup, Slider, Browse, Remove, Confirm, Timeout, Exit, Close }
+    enum Kind { Startup, ScreenTime, Slider, Browse, Remove, Confirm, Timeout, Exit, Close }
     record Hit(Kind Kind, Rectangle Rect, string? Action = null, int Value = 0);
 
     readonly List<Hit> _hits = new();
@@ -78,6 +78,7 @@ sealed class SettingsDialog : Form
             _hits.Add(new(Kind.Timeout, R(chipX, TimeoutRowY, 40, 28), Value: seconds));
             chipX += 44;
         }
+        _hits.Add(new(Kind.ScreenTime, R(Pad, ScreenTimeCardY, W - Pad * 2, 68)));
         _hits.Add(new(Kind.Exit, R(Pad, H - 52, 140, 32)));
         _hits.Add(new(Kind.Close, R(W - Pad - 100, H - 52, 100, 32)));
     }
@@ -173,6 +174,9 @@ sealed class SettingsDialog : Form
             case Kind.Startup:
                 Settings.StartWithWindows = !Settings.StartWithWindows;
                 break;
+            case Kind.ScreenTime:
+                Settings.ScreenTime = !Settings.ScreenTime;
+                break;
             case Kind.Browse:
                 PickBackground();
                 break;
@@ -237,10 +241,12 @@ sealed class SettingsDialog : Form
         var g = e.Graphics;
         g.SmoothingMode = SmoothingMode.AntiAlias;
         g.Clear(_p.Bg);
-        DrawStartupCard(g);
+        DrawToggleCard(g, Find(Kind.Startup), "Start with Windows", "Open automatically when you sign in", Settings.StartWithWindows);
         DrawTransparencyCard(g);
         DrawBackgroundCard(g);
         DrawConfirmCard(g);
+        DrawToggleCard(g, Find(Kind.ScreenTime), "Screen time",
+            "Track time per app, stays on this PC", Settings.ScreenTime);
         DrawButton(g, Find(Kind.Exit), "Exit PowerTray", accent: false);
         DrawButton(g, Find(Kind.Close), "Close", accent: true);
         DrawPreview(g);
@@ -338,15 +344,13 @@ sealed class SettingsDialog : Form
         DrawText(g, subtitle, _small, new Rectangle(card.X + S(CardPad), card.Y + S(36), w, S(18)), _p.SubText, TextFormatFlags.Left);
     }
 
-    void DrawStartupCard(Graphics g)
+    void DrawToggleCard(Graphics g, Hit card, string title, string subtitle, bool on)
     {
-        var card = Find(Kind.Startup);
         var r = card.Rect;
         var fill = card == _pressed ? _p.TilePressed : card == _hover ? _p.TileHover : _p.Tile;
         FillRound(g, r, S(6), fill, _p.Border);
-        DrawCardText(g, r, "Start with Windows", "Open automatically when you sign in");
+        DrawCardText(g, r, title, subtitle);
 
-        bool on = Settings.StartWithWindows;
         var toggle = new Rectangle(r.Right - S(CardPad + 40), r.Y + (r.Height - S(20)) / 2, S(40), S(20));
         DrawText(g, on ? "On" : "Off", _body, new Rectangle(toggle.X - S(44), toggle.Y, S(34), toggle.Height), _p.Text, TextFormatFlags.Right);
         int knob = S(card == _hover ? 14 : 12);
@@ -403,6 +407,7 @@ sealed class SettingsDialog : Form
 
     int ConfirmRows => (_actions.Count + ConfirmCols - 1) / ConfirmCols;
     int TimeoutRowY => ConfirmCardY + 62 + ConfirmRows * (ConfirmItemH + 4) + 6;
+    int ScreenTimeCardY => TimeoutRowY + 28 + 12 + 8;
 
     void DrawConfirmCard(Graphics g)
     {

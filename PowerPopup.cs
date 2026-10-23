@@ -1,4 +1,5 @@
 using System.Drawing.Drawing2D;
+using System.Globalization;
 using System.Runtime.InteropServices;
 using Microsoft.Win32;
 using static PowerTray.Ui;
@@ -12,19 +13,22 @@ sealed class PowerPopup : Form
 {
     // Layout in 96-DPI units, scaled by _s
     const int W = 360, Pad = 16, HeaderH = 72, Cols = 3, Gap = 8, TileH = 88, BarH = 44, FooterH = 52, ButtonH = 36;
+    const int UsageTop = 68, UsageRowH = 28;
     static readonly int[] Presets = { 15, 30, 60, 120 };
 
-    enum View { Grid, Confirm, Timer }
-    enum Kind { Tile, Yes, No, Gear, TimerBar, TimerCancel, Minus, Plus, Preset, Start, Back }
+    enum View { Grid, Confirm, Timer, ScreenTime }
+    enum Kind { Tile, Yes, No, Gear, TimerBar, TimerCancel, Minus, Plus, Preset, Start, Back, UsageBar, DayPrev, DayNext }
     record Hit(Kind Kind, Rectangle Rect, PowerAction? Action = null, int Value = 0);
 
     readonly IReadOnlyList<PowerAction> _actions;
     readonly Action _openSettings;
     readonly ShutdownTimer _timer;
+    readonly ScreenTime _screenTime;
+    readonly Dictionary<string, Bitmap?> _appIcons = new(StringComparer.OrdinalIgnoreCase);
     readonly System.Windows.Forms.Timer _anim = new() { Interval = 10 };
     readonly System.Windows.Forms.Timer _confirmTick = new() { Interval = 50 };
     readonly List<Hit> _hits = new();
-    readonly int _tilesH, _contentH;
+    readonly int _tilesH;
 
     Palette _p = Palette.Current();
     float _s = 1f;
@@ -39,17 +43,22 @@ sealed class PowerPopup : Form
     int _confirmTimeout;
     bool _timedConfirm;
     int _fromTop, _toTop;
+    DateOnly _usageDay, _firstUsageDay;
+    IReadOnlyList<AppUsage> _usage = Array.Empty<AppUsage>();
 
-    int FooterTop => HeaderH + _contentH + Pad;
+    // The screen time bar only shows while tracking is on
+    int ContentH => _tilesH + Gap + BarH + (Settings.ScreenTime ? Gap + BarH : 0);
+    int FooterTop => HeaderH + ContentH + Pad;
+    static DateOnly Today => DateOnly.FromDateTime(DateTime.Now);
 
-    public PowerPopup(IReadOnlyList<PowerAction> actions, ShutdownTimer timer, Action openSettings)
+    public PowerPopup(IReadOnlyList<PowerAction> actions, ShutdownTimer timer, ScreenTime screenTime, Action openSettings)
     {
         _actions = actions;
         _openSettings = openSettings;
         _timer = timer;
+        _screenTime = screenTime;
         int rows = (actions.Count + Cols - 1) / Cols;
         _tilesH = rows * TileH + (rows - 1) * Gap;
-        _contentH = _tilesH + Gap + BarH;
 
         FormBorderStyle = FormBorderStyle.None;
         ShowInTaskbar = false;
@@ -66,6 +75,12 @@ sealed class PowerPopup : Form
             if (_timedConfirm && !_timer.Active) { HidePopup(); return; }
             LayoutHits();
             RefreshIfVisible();
+        };
+        _screenTime.Updated += () =>
+        {
+            if (!Visible) return;
+            if (_view == View.ScreenTime && _usageDay == Today) _usage = _screenTime.Day(_usageDay);
+            Invalidate();
         };
     }
 
@@ -229,7 +244,7 @@ sealed class PowerPopup : Form
     void LayoutHits()
     {
         _hits.Clear();
-        int fullW = W - Pad * 2, halfW = (fullW - Gap) / 2, buttonsY = HeaderH + _contentH - ButtonH;
+        int fullW = W - Pad * 2, halfW = (fullW - Gap) / 2, buttonsY = HeaderH + ContentH - ButtonH;
         switch (_view)
         {
             case View.Grid:
@@ -243,6 +258,14 @@ sealed class PowerPopup : Form
                 _hits.Add(new(Kind.TimerBar, R(Pad, barY, fullW, BarH)));
                 if (_timer.Active)
                     _hits.Add(new(Kind.TimerCancel, R(W - Pad - 6 - 72, barY + 6, 72, BarH - 12)));
+                if (Settings.ScreenTime)
+                    _hits.Add(new(Kind.UsageBar, R(Pad, barY + BarH + Gap, fullW, BarH)));
+                break;
+
+            case View.ScreenTime:
+                if (_usageDay > _firstUsageDay) _hits.Add(new(Kind.DayPrev, R(Pad, HeaderH + 30, 32, 28)));
+                if (_usageDay < Today) _hits.Add(new(Kind.DayNext, R(W - Pad - 32, HeaderH + 30, 32, 28)));
+                _hits.Add(new(Kind.Back, R(Pad, buttonsY, fullW, ButtonH)));
                 break;
 
             case View.Confirm:
@@ -338,6 +361,18 @@ sealed class PowerPopup : Form
             case Kind.TimerBar:
                 SetView(View.Timer);
                 break;
+            case Kind.UsageBar:
+                _firstUsageDay = ScreenTime.FirstDay();
+                _usageDay = Today;
+                _usage = _screenTime.Day(_usageDay);
+                SetView(View.ScreenTime);
+                break;
+            case Kind.DayPrev:
+                ShowUsage(_usageDay.AddDays(-1));
+                break;
+            case Kind.DayNext:
+                ShowUsage(_usageDay.AddDays(1));
+                break;
             case Kind.TimerCancel:
                 _timer.Cancel();
                 break;
@@ -362,6 +397,15 @@ sealed class PowerPopup : Form
                 _openSettings();
                 break;
         }
+    }
+
+    void ShowUsage(DateOnly day)
+    {
+        _usageDay = day;
+        _usage = _screenTime.Day(day);
+        LayoutHits();
+        _hover = HitAt(PointToClient(Cursor.Position));
+        Invalidate();
     }
 
     void Run(PowerAction action)
@@ -422,12 +466,16 @@ sealed class PowerPopup : Form
             case View.Grid:
                 foreach (var h in _hits.Where(h => h.Kind == Kind.Tile)) DrawTile(g, h);
                 DrawTimerBar(g);
+                if (Settings.ScreenTime) DrawUsageBar(g);
                 break;
             case View.Confirm:
                 DrawConfirm(g, _confirming!);
                 break;
             case View.Timer:
                 DrawTimerView(g);
+                break;
+            case View.ScreenTime:
+                DrawUsageView(g);
                 break;
         }
 
@@ -470,6 +518,80 @@ sealed class PowerPopup : Form
             DrawText(g, "Shutdown timer", _body, textRect, TileText(bar), TextFormatFlags.Left);
             DrawText(g, "", _smallIcon, new Rectangle(r.Right - S(40), r.Y, S(32), r.Height), _p.SubText);
         }
+    }
+
+    void DrawUsageBar(Graphics g)
+    {
+        var bar = Find(Kind.UsageBar);
+        var r = bar.Rect;
+        FillRound(g, r, S(6), TileFill(bar), _p.Border);
+        DrawText(g, "\uE7F4", _smallIcon, new Rectangle(r.X + S(8), r.Y, S(32), r.Height), TileText(bar));
+        DrawText(g, "Screen time", _body, new Rectangle(r.X + S(44), r.Y, r.Width - S(44 + 140), r.Height), TileText(bar), TextFormatFlags.Left);
+        int total = _screenTime.Day(Today).Sum(u => u.Seconds);
+        DrawText(g, $"Today {ScreenTime.Format(total)}", _small, new Rectangle(r.Right - S(40 + 100), r.Y, S(100), r.Height), _p.SubText, TextFormatFlags.Right);
+        DrawText(g, "\uE76C", _smallIcon, new Rectangle(r.Right - S(40), r.Y, S(32), r.Height), _p.SubText);
+    }
+
+    void DrawUsageView(Graphics g)
+    {
+        int w = W - Pad * 2;
+        DrawText(g, "Screen time", _title, R(Pad, HeaderH, w, 24), _p.Text, TextFormatFlags.Left);
+        DrawText(g, ScreenTime.Format(_usage.Sum(u => u.Seconds)), _title, R(Pad, HeaderH, w, 24), _p.Text, TextFormatFlags.Right);
+
+        // Day picker, with arrows only where there is a day to go to
+        string day = _usageDay == Today ? "Today"
+            : _usageDay == Today.AddDays(-1) ? "Yesterday"
+            : _usageDay.ToString("ddd d MMM", CultureInfo.InvariantCulture);
+        DrawText(g, day, _body, R(Pad + 36, HeaderH + 30, w - 72, 28), _p.Text);
+        foreach (var (kind, glyph, x) in new[] { (Kind.DayPrev, "\uE76B", Pad), (Kind.DayNext, "\uE76C", W - Pad - 32) })
+        {
+            if (_hits.FirstOrDefault(h => h.Kind == kind) is { } h) DrawButton(g, h, glyph, _smallIcon);
+            else DrawText(g, glyph, _smallIcon, R(x, HeaderH + 30, 32, 28), _p.Divider);
+        }
+
+        int rowsTop = HeaderH + UsageTop, maxRows = (ContentH - ButtonH - Gap - UsageTop) / UsageRowH;
+        if (_usage.Count == 0)
+        {
+            DrawText(g, "Nothing recorded for this day", _small, R(Pad, rowsTop, w, UsageRowH * 2), _p.SubText);
+        }
+        else
+        {
+            // Past the room we have, the rest go into one "Other apps" row
+            var rows = _usage.Count <= maxRows ? _usage.ToList()
+                : _usage.Take(maxRows - 1).Append(new AppUsage("Other apps", null, _usage.Skip(maxRows - 1).Sum(u => u.Seconds))).ToList();
+            int most = rows.Max(u => u.Seconds);
+            for (int i = 0; i < rows.Count; i++)
+            {
+                var u = rows[i];
+                int y = rowsTop + i * UsageRowH;
+                if (AppIcon(u.Path) is { } icon)
+                {
+                    g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                    g.DrawImage(icon, R(Pad, y + 6, 16, 16));
+                }
+                DrawText(g, u.Name, _small, R(Pad + 24, y, 116, UsageRowH), _p.Text, TextFormatFlags.Left);
+                var track = R(Pad + 148, y + 11, w - 148 - 60, 6);
+                int len = Math.Max(track.Height, (int)(track.Width * (long)u.Seconds / Math.Max(1, most)));
+                FillRound(g, new Rectangle(track.X, track.Y, len, track.Height), track.Height / 2, _p.Accent);
+                DrawText(g, ScreenTime.Format(u.Seconds), _small, R(W - Pad - 56, y, 56, UsageRowH), _p.SubText, TextFormatFlags.Right);
+            }
+        }
+
+        DrawButton(g, Find(Kind.Back), "Back");
+    }
+
+    /// <summary>The app's own icon, cached; null when the file is gone or has none.</summary>
+    Bitmap? AppIcon(string? path)
+    {
+        if (path == null) return null;
+        if (_appIcons.TryGetValue(path, out var bmp)) return bmp;
+        try
+        {
+            using var icon = File.Exists(path) ? Icon.ExtractAssociatedIcon(path) : null;
+            bmp = icon?.ToBitmap();
+        }
+        catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException) { }
+        return _appIcons[path] = bmp;
     }
 
     void DrawConfirm(Graphics g, PowerAction a)
@@ -574,6 +696,7 @@ sealed class PowerPopup : Form
             _anim.Dispose();
             _confirmTick.Dispose();
             _background?.Dispose();
+            foreach (var icon in _appIcons.Values) icon?.Dispose();
             foreach (var f in AllFonts) f?.Dispose();
         }
         base.Dispose(disposing);

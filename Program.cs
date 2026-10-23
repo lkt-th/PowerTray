@@ -24,6 +24,7 @@ sealed class TrayContext : ApplicationContext
     readonly NotifyIcon _tray;
     readonly PowerPopup _popup;
     readonly ShutdownTimer _timer = new();
+    readonly ScreenTime _screenTime = new();
     readonly ToolStripMenuItem _cancelTimerItem;
     readonly IReadOnlyList<string> _actionLabels;
     SettingsDialog? _settings;
@@ -43,7 +44,7 @@ sealed class TrayContext : ApplicationContext
         actions.Add(new("", "Shut down", "Shut down now?", saveWork, () => Run("shutdown", "/s /t 0")));
 
         _actionLabels = actions.Select(a => a.Label).ToList();
-        _popup = new PowerPopup(actions, _timer, ShowSettings);
+        _popup = new PowerPopup(actions, _timer, _screenTime, ShowSettings);
 
         // Right-click menu
         var menu = new ContextMenuStrip();
@@ -130,6 +131,7 @@ sealed class TrayContext : ApplicationContext
         _settings?.Close();
         _popup.Dispose();
         _timer.Dispose();
+        _screenTime.Dispose();
         base.ExitThreadCore();
     }
 

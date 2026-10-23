@@ -66,6 +66,22 @@ static class Settings
         }
     }
 
+    /// <summary>Whether to record how long each app is used. Off by default.</summary>
+    public static bool ScreenTime
+    {
+        get
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(AppKey);
+            return key?.GetValue("ScreenTime") is int v && v != 0;
+        }
+        set
+        {
+            using var key = Registry.CurrentUser.CreateSubKey(AppKey);
+            key.SetValue("ScreenTime", value ? 1 : 0, RegistryValueKind.DWord);
+            Changed?.Invoke();
+        }
+    }
+
     /// <summary>Whether a power button asks before running. All do by default.</summary>
     public static bool ShouldConfirm(string action) => !NoConfirm().Contains(action);
 
@@ -83,7 +99,7 @@ static class Settings
     static HashSet<string> NoConfirm() =>
         (GetString("NoConfirm") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries).ToHashSet();
 
-    static string DataDir => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PowerTray");
+    public static string DataDir => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PowerTray");
 
     /// <summary>PowerTray's own copy of the background image, or null when none is set.</summary>
     public static string? BackgroundPath =>
