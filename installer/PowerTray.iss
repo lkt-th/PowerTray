@@ -99,7 +99,7 @@ begin
 
   // Settings are kept unless the user asks to remove them (and always kept on silent uninstall)
   if not UninstallSilent and
-     (MsgBox('Also remove your PowerTray settings and background image?', mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES) then
+     (MsgBox('Also remove your PowerTray settings, background image and screen time history?', mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES) then
   begin
     RegDeleteKeyIncludingSubkeys(HKCU, 'Software\PowerTray');
     DelTree(ExpandConstant('{localappdata}\PowerTray'), True, True, True);
